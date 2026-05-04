@@ -28,29 +28,44 @@
 | GitHub 계정 | https://github.com |
 | Node 20+ (로컬 VAPID 생성용) | https://nodejs.org |
 
-## 2. 로컬 준비 (5분)
+## 2. 로컬 준비 (5분) — Windows PowerShell
 
-```bash
-cd news-pwa
+PowerShell을 관리자 권한으로 열 필요는 없습니다. 일반 PowerShell 또는 Windows Terminal에서:
+
+```powershell
+cd "$HOME\Documents\news-pwa"   # 본인이 복사해둔 경로로 이동
 npm install
 
 # VAPID 키 생성 → 출력값 메모해 둡니다 (나중에 Vercel 환경변수에 넣음)
 npm run vapid
 
-# CRON_SECRET 무작위 문자열 생성
-openssl rand -hex 32
-# Windows PowerShell: -join ((48..57)+(97..122) | Get-Random -Count 64 | %{[char]$_})
+# CRON_SECRET 무작위 64자 16진수 문자열 생성
+-join ((1..32) | %{ '{0:x2}' -f (Get-Random -Maximum 256) })
 ```
 
-## 3. GitHub에 올리기
+> 결과를 그대로 복사해두세요. 곧 Vercel 환경변수에 붙여넣습니다.
 
-```bash
+## 3. GitHub에 올리기 — Windows PowerShell
+
+GitHub CLI(`gh`)가 설치돼 있다면:
+
+```powershell
 git init
 git add -A
 git commit -m "initial: daily tech news PWA"
 git branch -M main
 gh repo create news-pwa --public --source=. --push
-# 또는: GitHub 웹에서 빈 리포 만들고 git remote add → git push
+```
+
+`gh`가 없으면 더 간단한 방법: GitHub 웹에서 빈 리포 `news-pwa` 만들고:
+
+```powershell
+git init
+git add -A
+git commit -m "initial: daily tech news PWA"
+git branch -M main
+git remote add origin https://github.com/<본인_username>/news-pwa.git
+git push -u origin main
 ```
 
 ## 4. Vercel 배포
@@ -59,12 +74,23 @@ gh repo create news-pwa --public --source=. --push
 2. Framework Preset = **Other**
 3. **Deploy** 버튼 — 첫 배포 (실패해도 됨, 환경변수 아직 없음)
 
-## 5. Vercel KV 연결
+## 5. Storage 연결 (Upstash Redis)
+
+> 2026년 기준 Vercel은 "KV" 메뉴를 마켓플레이스로 옮겼습니다. 실체는 동일 — Upstash Redis입니다.
 
 1. 프로젝트 대시보드 → **Storage** 탭
-2. **Create Database** → **KV** 선택 → 이름 아무거나 → **Create**
-3. **Connect Project** → 현재 프로젝트 선택 → 모든 환경 체크 → **Connect**
-4. `KV_REST_API_URL`, `KV_REST_API_TOKEN` 자동 주입됨
+2. **Create** → `Marketplace Database Providers` 섹션에서 **Upstash** 선택
+3. **Redis** 선택 (Vector/Queue/Search 아님)
+4. 설정:
+   - Plan: **Free** (10K 명령/일, 256MB)
+   - Region: **Tokyo (ap-northeast-1)** 또는 **Singapore** 권장 (한국 지연 짧음)
+   - Name: `news-pwa-kv` 등 자유
+5. **Create** → 같은 화면에서 **현재 프로젝트(news-pwa)에 Connect**
+6. 자동 주입되는 환경변수:
+   - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (필수)
+   - `KV_URL`, `REDIS_URL` 등은 무시해도 됩니다
+
+코드(`lib/kv.js`)가 두 명명 규칙(`KV_REST_API_*` / `UPSTASH_REDIS_REST_*`) 모두를 받게 돼 있어 둘 다 동작합니다.
 
 ## 6. 환경변수 채우기
 
@@ -75,22 +101,31 @@ gh repo create news-pwa --public --source=. --push
 VAPID_PUBLIC_KEY      = B...                              ← `npm run vapid` 출력
 VAPID_PRIVATE_KEY     = ...                               ← `npm run vapid` 출력
 VAPID_SUBJECT         = mailto:junghun.lee@itcen.com     ← 본인 이메일
-CRON_SECRET           = <openssl rand -hex 32 결과>       ← Cron 인증용
+CRON_SECRET           = <2단계에서 생성한 64자 16진 문자열>  ← Cron 인증용
 ```
 
 KV 변수는 5단계에서 자동으로 들어가니 따로 넣을 필요 없습니다.
 
-## 7. 재배포 + 첫 갱신
+## 7. 재배포 + 첫 갱신 — Windows PowerShell
 
 1. **Deployments** 탭 → 최신 배포의 ⋯ → **Redeploy** (환경변수 반영)
-2. 한 번 수동으로 다이제스트 생성:
+2. 한 번 수동으로 다이제스트 생성 — PowerShell에서:
 
-```bash
-curl -X POST https://<your-project>.vercel.app/api/refresh \
-  -H "Authorization: Bearer <CRON_SECRET>"
+```powershell
+$secret = "<2단계에서 만든 CRON_SECRET 값>"
+$url    = "https://<your-project>.vercel.app/api/refresh"
+Invoke-RestMethod -Method POST -Uri $url -Headers @{ Authorization = "Bearer $secret" }
 ```
 
-10초 뒤 JSON 응답이 오면 성공.
+> Windows 11의 PowerShell 5.1 또는 7.x 모두 동작합니다.
+
+10~20초 뒤 JSON 응답(`ok: True`, `totalItems: ...`)이 화면에 출력되면 성공.
+
+`curl` 이 더 익숙하시면 `curl.exe` (PowerShell의 `curl` alias가 아닌 진짜 curl)도 동일하게 사용 가능:
+
+```powershell
+curl.exe -X POST "https://<your-project>.vercel.app/api/refresh" -H "Authorization: Bearer <CRON_SECRET>"
+```
 
 ## 8. 휴대폰에 설치
 
@@ -110,7 +145,7 @@ curl -X POST https://<your-project>.vercel.app/api/refresh \
 
 - **로그 확인**: Vercel 대시보드 → Functions → `api/refresh` → 최근 호출 클릭
 - **Cron 동작 확인**: Settings → Cron Jobs 에서 다음 실행 시각·최근 실행 결과
-- **수동 갱신**: 위 7번의 curl 명령 재사용
+- **수동 갱신**: 위 7번의 `Invoke-RestMethod` 또는 `curl.exe` 명령 재사용
 - **카테고리 추가/변경**: `lib/rss.js` 의 `QUERIES` / `CATEGORIES` 수정 후 재배포
 - **시간 변경**: `vercel.json` 의 cron 표현식 수정 (UTC 기준! `0 22 * * *` = 한국시간 7시)
 - **나중에 AI 요약 추가**: `lib/summarize.js` 를 LLM 호출 버전으로 교체 (반환 형태 동일하게 유지)
