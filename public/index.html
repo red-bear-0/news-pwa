@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#1f1d1a" />
+<title>매일 기술 뉴스</title>
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/icon-192.png" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", Roboto, sans-serif;
+    background: #fafaf7;
+    color: #1f1d1a;
+    line-height: 1.55;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 16px 16px 64px; }
+  header.top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 14px; gap: 8px;
+  }
+  header.top h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  .meta { font-size: 11px; color: #756f63; margin-top: 2px; }
+  button {
+    background: #1f1d1a; color: #fff; border: 0;
+    padding: 7px 12px; border-radius: 999px; font-size: 12px;
+    cursor: pointer; font-weight: 500;
+  }
+  button.ghost {
+    background: transparent; color: #1f1d1a;
+    border: 1px solid #d8d2c4;
+  }
+  button:disabled { opacity: 0.5; cursor: wait; }
+  .actions { display: flex; gap: 6px; }
+  .tabs {
+    display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    margin: 4px -16px 14px; padding: 0 16px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab {
+    flex-shrink: 0;
+    background: #f1ede3; border: 1px solid transparent;
+    padding: 7px 14px; border-radius: 999px;
+    font-size: 13px; color: #4a443a; font-weight: 500;
+  }
+  .tab.active { background: #1f1d1a; color: #fff; }
+  section.cat { display: none; }
+  section.cat.active { display: block; }
+  section.cat h2 {
+    font-size: 14px; margin: 0 0 4px; font-weight: 600; color: #2b2823;
+  }
+  .cat-desc { font-size: 11px; color: #847c6e; margin: 0 0 12px; }
+  ol.items { list-style: none; padding: 0; margin: 0; }
+  ol.items li {
+    padding: 13px 0; border-bottom: 1px solid #efe9dd;
+  }
+  ol.items li:last-child { border-bottom: none; }
+  .headline {
+    font-size: 15px; font-weight: 600; color: #1f1d1a;
+    text-decoration: none; display: block; margin-bottom: 4px;
+    line-height: 1.4;
+  }
+  .summary { font-size: 13px; color: #4a443a; margin: 0 0 5px; }
+  .src { font-size: 11px; color: #93897a; }
+  .src a { color: #93897a; text-decoration: none; }
+  .empty { padding: 60px 0; text-align: center; color: #93897a; font-size: 13px; }
+  .skeleton {
+    height: 80px; background: linear-gradient(90deg, #efe9dd, #f7f3ea, #efe9dd);
+    background-size: 200% 100%; animation: shim 1.4s infinite;
+    border-radius: 8px; margin-bottom: 8px;
+  }
+  @keyframes shim { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+  .toast {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: #1f1d1a; color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-size: 13px; opacity: 0; transition: opacity .25s;
+    pointer-events: none; z-index: 99; max-width: 92%;
+  }
+  .toast.show { opacity: 1; }
+  footer.bot {
+    margin-top: 26px; padding-top: 14px; border-top: 1px solid #e7e3da;
+    font-size: 11px; color: #93897a; line-height: 1.6;
+  }
+  .err { color: #b1361e; font-size: 12px; padding: 10px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>매일 기술 뉴스</h1>
+      <div class="meta" id="meta">불러오는 중…</div>
+    </div>
+    <div class="actions">
+      <button class="ghost" id="bell-btn" type="button" title="푸시 알림 구독">🔔</button>
+    </div>
+  </header>
+
+  <div class="tabs" id="tabs"></div>
+  <div id="content">
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+    <div class="skeleton"></div>
+  </div>
+
+  <footer class="bot">
+    매일 한국시간 오전 7시 자동 갱신 · 푸시 알림 활성화 시 새 다이제스트가 도착하면 알려드립니다.<br/>
+    헤드라인을 탭하면 원문 기사로 이동합니다.
+  </footer>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const STATE = { current: null };
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+async function loadDigest() {
+  try {
+    const resp = await fetch('/api/news', { cache: 'no-cache' });
+    const data = await resp.json();
+    render(data);
+  } catch (err) {
+    document.getElementById('content').innerHTML =
+      '<div class="err">불러오기 실패: ' + (err.message || err) + '</div>';
+  }
+}
+
+function render(data) {
+  const meta = document.getElementById('meta');
+  if (!data || !data.categories || data.categories.length === 0) {
+    meta.textContent = '데이터 없음';
+    document.getElementById('content').innerHTML =
+      '<div class="empty">' + (data && data.message ? data.message : '아직 데이터가 없습니다.') + '</div>';
+    document.getElementById('tabs').innerHTML = '';
+    return;
+  }
+
+  meta.textContent = data.lastUpdated ? data.lastUpdated + ' 다이제스트' : '최신';
+
+  const tabs = document.getElementById('tabs');
+  const content = document.getElementById('content');
+  tabs.innerHTML = '';
+  content.innerHTML = '';
+
+  data.categories.forEach((cat, idx) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'tab' + (idx === 0 ? ' active' : '');
+    tab.dataset.cat = cat.id;
+    tab.textContent = cat.title + ' (' + (cat.items?.length || 0) + ')';
+    tab.onclick = () => activate(cat.id);
+    tabs.appendChild(tab);
+
+    const sec = document.createElement('section');
+    sec.className = 'cat' + (idx === 0 ? ' active' : '');
+    sec.dataset.cat = cat.id;
+    sec.innerHTML =
+      '<h2>' + cat.title + '</h2>' +
+      '<p class="cat-desc">' + (cat.desc || '') + '</p>';
+    if (cat.error) {
+      sec.innerHTML += '<div class="err">갱신 실패: ' + cat.error + '</div>';
+    }
+    if (!cat.items || cat.items.length === 0) {
+      sec.innerHTML += '<div class="empty">이 카테고리에 항목이 없습니다.</div>';
+    } else {
+      const ol = document.createElement('ol');
+      ol.className = 'items';
+      cat.items.forEach(it => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.className = 'headline';
+        a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.textContent = it.headline;
+        li.appendChild(a);
+        const p = document.createElement('p');
+        p.className = 'summary';
+        p.textContent = it.summary;
+        li.appendChild(p);
+        if (it.source) {
+          const s = document.createElement('div');
+          s.className = 'src';
+          const link = document.createElement('a');
+          link.href = it.url; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          link.textContent = '원문 · ' + it.source + ' ↗';
+          s.appendChild(link);
+          li.appendChild(s);
+        }
+        ol.appendChild(li);
+      });
+      sec.appendChild(ol);
+    }
+    content.appendChild(sec);
+  });
+}
+
+function activate(catId) {
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.cat === catId));
+  document.querySelectorAll('section.cat').forEach(s =>
+    s.classList.toggle('active', s.dataset.cat === catId));
+}
+
+async function setupPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    showToast('이 브라우저는 푸시 알림을 지원하지 않습니다.');
+    return;
+  }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      showToast('이미 알림이 켜져 있어요.');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') {
+      showToast('알림 권한이 거부됐어요.');
+      return;
+    }
+    const keyResp = await fetch('/api/vapid-public-key');
+    const { key } = await keyResp.json();
+    if (!key) {
+      showToast('서버에 VAPID 키가 설정되지 않았습니다.');
+      return;
+    }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+    await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(sub),
+    });
+    showToast('알림이 켜졌어요. 매일 7시에 알려드릴게요.');
+  } catch (err) {
+    showToast('알림 등록 실패: ' + err.message);
+  }
+}
+
+document.getElementById('bell-btn').addEventListener('click', setupPush);
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.error('SW register failed:', err);
+    });
+  });
+}
+
+loadDigest();
+</script>
+</body>
+</html>

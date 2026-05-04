@@ -1,0 +1,18 @@
+{
+  "name": "daily-tech-news-pwa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Daily Korean tech-news digest as an installable PWA, hosted on Vercel. 100% free — no LLM API key required.",
+  "engines": { "node": ">=20" },
+  "type": "module",
+  "scripts": {
+    "vapid": "node scripts/gen-vapid.mjs",
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.34.3",
+    "fast-xml-parser": "^4.5.0",
+    "web-push": "^3.6.7"
+  }
+}
