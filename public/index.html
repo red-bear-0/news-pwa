@@ -68,6 +68,11 @@
     line-height: 1.4;
   }
   .summary { font-size: 13px; color: #4a443a; margin: 0 0 5px; }
+  .tech-badge {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    color: #5b3aff; background: #efeaff; padding: 2px 7px;
+    border-radius: 4px; margin-bottom: 4px; letter-spacing: .02em;
+  }
   .src { font-size: 11px; color: #93897a; }
   .src a { color: #93897a; text-decoration: none; }
   .empty { padding: 60px 0; text-align: center; color: #93897a; font-size: 13px; }
@@ -191,6 +196,13 @@ function render(data) {
       ol.className = 'items';
       cat.items.forEach(it => {
         const li = document.createElement('li');
+        if (it.tech) {
+          const badge = document.createElement('span');
+          badge.className = 'tech-badge';
+          badge.textContent = it.tech;
+          li.appendChild(badge);
+          li.appendChild(document.createElement('br'));
+        }
         const a = document.createElement('a');
         a.className = 'headline';
         a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
