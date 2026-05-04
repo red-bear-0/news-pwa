@@ -196,10 +196,12 @@ function render(data) {
         a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
         a.textContent = it.headline;
         li.appendChild(a);
-        const p = document.createElement('p');
-        p.className = 'summary';
-        p.textContent = it.summary;
-        li.appendChild(p);
+        if (it.summary && it.summary.trim()) {
+          const p = document.createElement('p');
+          p.className = 'summary';
+          p.textContent = it.summary;
+          li.appendChild(p);
+        }
         if (it.source) {
           const s = document.createElement('div');
           s.className = 'src';
